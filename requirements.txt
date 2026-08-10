@@ -1,4 +1,5 @@
-Flask
+Flask[async]
+httpx
 aiohttp
 urllib3
 pycryptodome

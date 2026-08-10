@@ -1,0 +1,4 @@
+Flask
+aiohttp
+urllib3
+pycryptodome

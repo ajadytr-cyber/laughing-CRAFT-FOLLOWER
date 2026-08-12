@@ -61,7 +61,7 @@ async def process_account_with_retry(client, account, index):
 
 async def main():
     """मुख्य फ़ंक्शन जो पूरी प्रक्रिया को चलाता है."""
-    input_file = "accounts.json"
+    input_file = "accounts_visit.json"
     try:
         with open(input_file) as f:
             accounts = json.load(f)

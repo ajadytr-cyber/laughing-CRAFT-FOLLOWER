@@ -29,7 +29,7 @@ jobs:
       - name: ⚙️ Run JWT Token Generator Script
         run: |
           echo "🚀 Running token generation script..."
-          python visit_jwt.py
+          python jwt.py
 
       - name: 📤 Commit & Push Token Files
         env:

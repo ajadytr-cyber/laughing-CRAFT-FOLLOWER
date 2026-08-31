@@ -2,7 +2,7 @@ name: 🔄 JWT Token Generator (India Time GMT+5:30)
 
 on:
   schedule:
-  - cron: '0 */6 * * *'  # 🕰️ Har 3 ghante par (12:00, 3:00, 6:00, 9:00 AM/PM IST)
+  - cron: '0 */4 * * *'  # 🕰️ Har 3 ghante par (12:00, 3:00, 6:00, 9:00 AM/PM IST)
   workflow_dispatch:
 
 permissions:

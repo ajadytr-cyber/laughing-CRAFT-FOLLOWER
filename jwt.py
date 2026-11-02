@@ -1,139 +1,178 @@
+#!/usr/bin/env python3
+"""
+accounts.json se accounts leke API se token fetch karta hai.
+Region ke hisaab se different files me save karta hai:
+  - IND                -> token_ind.json
+  - BR / SAC / NA / US -> token_br.json
+  - BD / others        -> token_bd.json
+
+Retry logic:
+  Pass 1 : sabhi accounts
+  Pass 2 : jo fail hue (2 sec baad)
+  Pass 3 : jo abhi bhi fail hain (2 sec baad)
+  ... max MAX_RETRIES rounds tak
+
+Last me failed UIDs comma-separated print.
+"""
+
 import json
 import time
-import asyncio
-import httpx
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 
-# --- Settings ---
-# API का URL यहाँ डालें
-API_URL = "https://ff-jwt-gen-api.lovable.app/api/public/token" 
-# कितनी बार दोबारा कोशिश करनी है
-MAX_RETRIES = 2 
-# हर दोबारा कोशिश के बीच कितना इंतज़ार करना है (सेकंड में)
-RETRY_DELAY = 3 
+# ---------------- CONFIG ----------------
+API_URL         = "https://star-jwt-api1.lovable.app/api/public/token"
+ACCOUNTS_FILE   = "accounts_visit.json"
 
-# --- Token Generation Logic ---
+MAX_WORKERS     = 10      # thread limit
+MAX_RETRIES     = 3       # total rounds (1 initial + 2 retries)
+RETRY_DELAY     = 2       # seconds between rounds
+REQUEST_TIMEOUT = 30      # seconds
 
-async def generate_single_token(client, uid: str, password: str):
-    """API से एक टोकन जेनरेट करता है."""
+# ---------------- REGION MAP ----------------
+def get_token_file(region: str) -> str:
+    r = (region or "").strip().upper()
+    if r == "IND":
+        return "token_ind_visit.json"
+    if r in ("BR", "SAC", "NA", "US"):
+        return "token_br_visit.json"
+    return "token_bd_visit.json"
+
+# ---------------- FILE IO (thread-safe) ----------------
+write_lock = threading.Lock()
+
+def load_existing(filename: str):
     try:
-        url = f"{API_URL}?uid={uid}&password={password}"
-        resp = await client.get(url, timeout=180)
-        
-        # अगर रिक्वेस्ट सफल रही तो JSON डेटा वापस भेजें
-        if resp.status_code == 200:
-            return resp.json()
-        # अगर सफल नहीं हुई तो None भेजें
-        return None
-    except Exception as e:
-        # किसी भी तरह की त्रुटि होने पर प्रिंट करें
-        print(f"UID {uid} के लिए त्रुटि: {e}")
-        return None
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
-async def process_account_with_retry(client, account, index):
-    """एक अकाउंट को दोबारा कोशिश करने वाले लॉजिक के साथ प्रोसेस करता है."""
-    uid = account['uid']
-    password = account['password']
-    
-    # MAX_RETRIES में दी गई संख्या तक कोशिश करें
-    for attempt in range(MAX_RETRIES):
-        token_data = await generate_single_token(client, uid, password)
-        
-        # अगर टोकन मिल गया, तो डेटा लौटा दें
-        if token_data and "token" in token_data:
-            return {
-                "status": "success",
-                "account": account,
-                "token_data": token_data,
-                "index": index
-            }
-        
-        # अगर यह आखिरी कोशिश नहीं है, तो इंतज़ार करें और फिर से कोशिश करें
-        if attempt < MAX_RETRIES - 1:
-            print(f"UID #{index + 1} {uid} - फ़ेल हुआ। {RETRY_DELAY} सेकंड बाद फिर से कोशिश की जाएगी...")
-            await asyncio.sleep(RETRY_DELAY)
-            
-    # सभी कोशिशें फ़ेल होने पर फ़ेलियर का मैसेज लौटा दें
-    return {
-        "status": "failed",
-        "account": account,
-        "index": index
-    }
+def save_token_to_file(result: dict, filename: str):
+    uid = str(result["uid"])
+    with write_lock:
+        data = load_existing(filename)
+        data = [d for d in data if str(d.get("uid")) != uid]
+        data.append(result)
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
-async def main():
-    """मुख्य फ़ंक्शन जो पूरी प्रक्रिया को चलाता है."""
-    input_file = "accounts.json"
+# ---------------- SINGLE-SHOT FETCH (no internal retry) ----------------
+def fetch_token_once(account: dict):
+    uid = str(account.get("uid", "")).strip()
+    password = account.get("password", "").strip()
+    if not uid or not password:
+        return uid, None, "missing uid/password"
+
+    params = {"uid": uid, "password": password}
     try:
-        with open(input_file) as f:
-            accounts = json.load(f)
-    except FileNotFoundError:
-        print(f"त्रुटि: '{input_file}' फ़ाइल नहीं मिली।")
-        return
-    except json.JSONDecodeError:
-        print(f"त्रुटि: '{input_file}' एक मान्य JSON नहीं है या खाली है।")
-        return
+        r = requests.get(API_URL, params=params, timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        return uid, None, f"request error: {e}"
 
-    print(f"🚀 {len(accounts)} अकाउंट्स के लिए टोकन बनाना शुरू किया जा रहा है...")
-    start_time = time.time()
-    
-    # रीजन के हिसाब से टोकन रखने के लिए डिक्शनरी
-    result = {'IND': [], 'BR': [], 'BD': []}
-    failed_accounts = []
+    if r.status_code == 200:
+        try:
+            j = r.json()
+        except Exception:
+            return uid, None, "invalid JSON response"
+        if j.get("token"):
+            return uid, j, None
+        return uid, None, f"no token: {str(j)[:150]}"
 
-    # httpx.AsyncClient का उपयोग करके एक साथ सभी रिक्वेस्ट भेजें
-    async with httpx.AsyncClient() as client:
-        # सभी अकाउंट्स के लिए टास्क बनाएँ
-        tasks = [process_account_with_retry(client, acc, i) for i, acc in enumerate(accounts)]
-        
-        # सभी टास्क पूरे होने का इंतज़ार करें
-        responses = await asyncio.gather(*tasks)
+    return uid, None, f"HTTP {r.status_code}: {r.text[:150]}"
 
-        for res in responses:
-            if res['status'] == 'success':
-                account = res['account']
-                token_data = res['token_data']
-                
-                # रीजन कोड के आधार पर टोकन को सही लिस्ट में डालें
-                region_code = token_data.get('region', '').upper()
-                if region_code == 'IND':
-                    region = 'IND'
-                elif region_code in {'BR', 'US', 'SAC', 'NA'}:
-                    region = 'BR'
-                else:
-                    region = 'BD'
-                
-                result[region].append({
-                    'uid': account['uid'],
-                    'token': token_data['token']
-                })
-                print(f"✅ UID #{res['index'] + 1} {account['uid']} - टोकन जेनरेट हुआ ({region})")
+# ---------------- PROCESS ONE BATCH (ek round) ----------------
+def run_round(accounts, round_num, total):
+    """Ek round me accounts process karta hai. Failed list return karta hai."""
+    ok = 0
+    failed = []
+    done = 0
+    n = len(accounts)
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        futures = {ex.submit(fetch_token_once, acc): acc for acc in accounts}
+
+        for fut in as_completed(futures):
+            uid, data, err = fut.result()
+            done += 1
+
+            if data:
+                result = {
+                    "uid":          uid,
+                    "token":        data.get("token"),
+                    "token_access": data.get("token_access", ""),
+                    "region":       data.get("region", ""),
+                    "account_id":   data.get("account_id", ""),
+                }
+                target = get_token_file(result["region"])
+                save_token_to_file(result, target)
+                ok += 1
+                print(f"  [R{round_num}] [{done:>3}/{n}] ✅ uid={uid} region={result['region']:<4} -> {target}")
             else:
-                # जो अकाउंट फ़ेल हो गए उन्हें लिस्ट में जोड़ें
-                failed_accounts.append(res['account']['uid'])
-                print(f"❌ UID #{res['index'] + 1} {res['account']['uid']} - टोकन जेनरेट नहीं हो सका।")
+                # original account dict wapas so we can retry
+                acc = futures[fut]
+                failed.append((acc, err))
+                print(f"  [R{round_num}] [{done:>3}/{n}] ❌ uid={uid} err={err}")
 
-    # परिणामी टोकन को फ़ाइलों में सेव करें
-    for region, tokens in result.items():
-        if tokens:
-            filename = f'token_{region.lower()}.json'
-            with open(filename, 'w') as f:
-                json.dump(tokens, f, indent=2)
-            print(f"💾 {len(tokens)} टोकन {filename} में सेव किए गए।")
+    return ok, failed
 
-    # --- विस्तृत सारांश प्रिंट करें ---
-    total_time = time.time() - start_time
-    print("\n" + "="*40)
-    print("✨ प्रोसेस पूरा हुआ! ✨")
-    print(f"⏱️ कुल समय: {total_time:.2f} सेकंड")
-    print(f" कुल अकाउंट्स: {len(accounts)}")
-    print(f"✔️ सफल टोकन: {len(accounts) - len(failed_accounts)}")
-    print(f"❌ फ़ेल हुए अकाउंट्स: {len(failed_accounts)}")
-    if failed_accounts:
-        print(f"   -> फ़ेल हुए UIDs: {', '.join(failed_accounts)}")
-    print("="*40)
+# ---------------- MAIN ----------------
+def main():
+    with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+        accounts = json.load(f)
 
+    # dedupe by uid
+    seen, unique = set(), []
+    for a in accounts:
+        uid = str(a.get("uid", "")).strip()
+        if uid and uid not in seen:
+            seen.add(uid)
+            unique.append(a)
+    accounts = unique
 
-# --- स्क्रिप्ट चलाएँ ---
+    total = len(accounts)
+    print(f"[*] Loaded {total} unique accounts")
+    print(f"[*] Threads = {MAX_WORKERS} | Rounds = {MAX_RETRIES} | Delay = {RETRY_DELAY}s\n")
+
+    current = accounts
+    total_ok = 0
+    last_errors = {}
+
+    for round_num in range(1, MAX_RETRIES + 1):
+        print(f"\n========== ROUND {round_num}/{MAX_RETRIES}  ({len(current)} accounts) ==========")
+        ok, failed = run_round(current, round_num, total)
+        total_ok += ok
+        print(f"[*] Round {round_num} done — success={ok} failed={len(failed)}")
+
+        if not failed:
+            print(f"[✓] All accounts done in round {round_num} 🎉")
+            current = []
+            break
+
+        # next round ke liye sirf failed accounts
+        last_errors = {str(acc.get("uid")): err for acc, err in failed}
+        current = [acc for acc, _ in failed]
+
+        if round_num < MAX_RETRIES:
+            print(f"[*] Waiting {RETRY_DELAY}s before retrying {len(current)} failed account(s)...")
+            time.sleep(RETRY_DELAY)
+
+    # Final summary
+    print(f"\n[✓] DONE — success={total_ok} failed={len(current)} total={total}")
+
+    if current:
+        failed_uids = [str(acc.get("uid")) for acc in current]
+        print(f"\n[!] FAILED UIDs ({len(failed_uids)}):")
+        print(",".join(failed_uids))
+
+        # optional: error bhi dikha do
+        print("\n[!] Last errors:")
+        for u in failed_uids:
+            print(f"   {u} -> {last_errors.get(u, '?')}")
+    else:
+        print("\n[!] No failed UIDs 🎉")
+
 if __name__ == "__main__":
-    # स्क्रिप्ट को चलाने के लिए `httpx` लाइब्रेरी की ज़रूरत होगी।
-    # इसे `pip install httpx` कमांड से इंस्टॉल करें।
-    asyncio.run(main())
+    main()

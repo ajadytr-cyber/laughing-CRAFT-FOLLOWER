@@ -1,5 +1,6 @@
 Flask[async]
 httpx
+requests
 aiohttp
 urllib3
 pycryptodome

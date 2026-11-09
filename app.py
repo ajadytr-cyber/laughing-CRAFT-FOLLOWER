@@ -98,7 +98,7 @@ async def send_one_request_async(session, semaphore, uid, token, client_url):
                 'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)',
                 'Accept': '*/*', 'Accept-Encoding': 'gzip',
                 'Authorization': f'Bearer {token}',
-                'X-GA': 'v1 1', 'ReleaseVersion': 'OB54',
+                'X-GA': 'v1 1', 'ReleaseVersion': 'OB55',
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Unity-Version': '2018.4.11f1'
             }

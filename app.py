@@ -24,7 +24,7 @@ REGION_CONFIG = {
     "NA": {"token_file": "token_br.json", "url": "https://client.us.freefiremobile.com"},
     "US": {"token_file": "token_br.json", "url": "https://client.us.freefiremobile.com"},
     "SAC": {"token_file": "token_br.json", "url": "https://client.us.freefiremobile.com"},
-    "DEFAULT": {"token_file": "token_bd.json", "url": "https://clientbp.ggpolarbear.com"}
+    "DEFAULT": {"token_file": "token_bd.json", "url": "https://clientbp.ppmainecoonghj.com"}
 }
 
 def load_tokens_live(filename):
@@ -92,15 +92,17 @@ def parse_success_hex(hex_data):
 async def send_one_request_async(session, semaphore, uid, token, client_url):
     async with semaphore:
         try:
-            url = f"{client_url}/Follow"
+            url = f"{client_url.rstrip('/')}/Follow"
             headers = {
-                'Host': client_url.replace('https://', ''),
-                'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)',
-                'Accept': '*/*', 'Accept-Encoding': 'gzip',
+                'User-Agent': 'UnityPlayer/2018.4.12f1 (UnityWebRequest/1.0, libcurl/8.5.0-DEV)',
+                'Accept': '*/*',
+                'Accept-Encoding': 'deflate, gzip',
+                'X-Ga-Sv': str(int(time.time())),
                 'Authorization': f'Bearer {token}',
-                'X-GA': 'v1 1', 'ReleaseVersion': 'OB55',
+                'X-Ga': 'v1 1',
+                'Releaseversion': 'OB55',
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Unity-Version': '2018.4.11f1'
+                'X-Unity-Version': '2018.4.12f1'
             }
             body = encrypt_body((b'\x08' + varint_encode(uid)).hex())
             async with session.post(url, headers=headers, data=body, ssl=False, timeout=10) as resp:
@@ -115,7 +117,6 @@ async def send_one_request_async(session, semaphore, uid, token, client_url):
             return "ERROR", None
 
 async def process_all_requests(uid, tokens_to_use, client_url):
-    # Increased concurrency for speed
     semaphore = asyncio.Semaphore(100)
     connector = aiohttp.TCPConnector(limit=200, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -133,11 +134,9 @@ def follow():
     region = request.args.get('region') or request.form.get('region', 'IND')
     follower_param = request.args.get('follower') or request.form.get('follower')
     
-    # Validate API key
     if not api_key or api_key != API_KEY:
         return jsonify({"status":"error","message":f"Invalid key. {API_KEY_DISPLAY}","code":401}), 401
     
-    # Validate UID
     if not target_uid:
         return jsonify({"status":"error","message":"UID required","code":400}), 400
     try:
@@ -145,7 +144,6 @@ def follow():
     except:
         return jsonify({"status":"error","message":"Invalid UID","code":400}), 400
     
-    # Validate follower parameter (now required)
     if follower_param is None:
         return jsonify({"status":"error","message":"follower parameter is required (e.g., &follower=50 or &follower=all)","code":400}), 400
     
@@ -157,7 +155,6 @@ def follow():
     if not all_tokens:
         return jsonify({"status":"error","message":f"No tokens for {region}","code":500}), 500
 
-    # Determine tokens to use based on follower parameter
     use_all = False
     if follower_param.lower() == "all":
         use_all = True
@@ -226,7 +223,7 @@ def follow():
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("  FF Follow API v6.5 (follower required, speed optimized)")
+    print("  FF Follow API v6.6 (Unity headers + new default URL)")
     print("=" * 50)
     print(f"  {API_KEY_DISPLAY}")
     print("  /follow?api_key=KEY&region=IND&UID=ID&follower=50")

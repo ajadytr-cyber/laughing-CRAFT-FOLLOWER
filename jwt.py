@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 # ---------------- CONFIG ----------------
-API_URL         = "https://star-jwt-api1.lovable.app/api/public/token"
+API_URL         = "https://ff-jwt-gen.stargmr.xyz/api/public/token"
 ACCOUNTS_FILE   = "accounts_visit.json"
 
 MAX_WORKERS     = 10      # thread limit

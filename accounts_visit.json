@@ -1,39 +1,42 @@
 [
   {
-    "uid": "7510204994",
-    "password": "STARRR_STAR_LBZU",
-    "account_id": "17829971136",
-    "name": "✪Starᴸᵀ³✿",
+    "uid": 4752918438,
+    "password": "S_BYSTARGMR_Ei3eV5Fb",
+    "account_id": "15522462758",
+    "name": "SG_LIKE⁴²⁵²",
     "region": "IND",
-    "Level": 20,
-    "date_created": ""
+    "date_created": "2026-04-27 08:12:06",
+    "thread_id": 2
+  }, 
+  {
+    "uid": "7510203802",
+    "password": "STARRR_STAR_SEKR",
+    "name": "STARGV⁷⁵⁶⁸",
+    "account_id": "17829969826",
+    "region": "IND",
+    "jwt_token": "eyJhbGciOiJIUzI1NiIs...",
+    "created_at": "2026-09-05T16:18:09.933315",
+    "thread_id": "8"
   },
   {
-    "uid": "7510205448",
-    "password": "STARRR_STAR_RUSU",
-    "account_id": "17829971948",
-    "name": "么Starᵂ⁷⁸ꨄ",
+    "uid": "7510203766",
+    "password": "STARRR_STAR_ICKL",
+    "name": "STARGV⁴¹²¹",
+    "account_id": "17829969827",
     "region": "IND",
-    "Level": 19,
-    "date_created": ""
+    "jwt_token": "eyJhbGciOiJIUzI1NiIs...",
+    "created_at": "2026-09-05T16:18:09.955005",
+    "thread_id": "2"
   },
   {
-    "uid": "7510205564",
-    "password": "STARRR_STAR_KFVR",
-    "account_id": "17829972181",
-    "name": "ꫂStar²ᵀ⁶☢",
+    "uid": "7510204102",
+    "password": "STARRR_STAR_NSJG",
+    "name": "STARGV¹²⁴⁵",
+    "account_id": "17829969944",
     "region": "IND",
-    "Level": 20,
-    "date_created": ""
-  },
-  {
-    "uid": "7510205781",
-    "password": "STARRR_STAR_LVTL",
-    "account_id": "17829972667",
-    "name": "☣Starᵂᴸ⁴☠",
-    "region": "IND",
-    "Level": 20,
-    "date_created": ""
+    "jwt_token": "eyJhbGciOiJIUzI1NiIs...",
+    "created_at": "2026-09-05T16:18:10.132548",
+    "thread_id": "7"
   },
   {
     "uid": "4652831470",
